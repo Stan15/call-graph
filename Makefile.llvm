@@ -1,0 +1,17 @@
+# Makefile.llvm - Compile the projet to LLVM IR with clang -S. NOTE: use -g flag to generate compile with debug information detailing the file location/line/column of each and every function, and other things.
+
+CC = clang
+CFLAGS = -Wall -Iinclude -Isrc/math -Isrc/utils -Ilib
+LLVM_FLAGS = -S -emit-llvm -g $(CFLAGS)
+
+SRCS = src/main.c src/math/arithmetic.c src/utils/logger.c lib/extra.c
+LL_FILES = $(patsubst %.c,build/llvm/%.ll,$(SRCS))
+
+all: $(LL_FILES)
+
+build/llvm/%.ll: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(LLVM_FLAGS) $< -o $@
+
+clean:
+	rm -rf build/llvm
