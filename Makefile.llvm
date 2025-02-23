@@ -6,12 +6,16 @@ LLVM_FLAGS = -S -emit-llvm -g $(CFLAGS)
 
 SRCS = src/main.c src/math/arithmetic.c src/utils/logger.c lib/extra.c
 LL_FILES = $(patsubst %.c,build/llvm/%.ll,$(SRCS))
+LINKED_LL = build/llvm/linked.ll
 
-all: $(LL_FILES)
+all: $(LINKED_LL)
 
 build/llvm/%.ll: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(LLVM_FLAGS) $< -o $@
+
+$(LINKED_LL): $(LL_FILES)
+	llvm-link $(LL_FILES) -o $(LINKED_LL)
 
 clean:
 	rm -rf build/llvm
