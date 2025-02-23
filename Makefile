@@ -1,27 +1,44 @@
-CC = gcc
+# Makefile.llvm - Compile the project to LLVM IR with clang -S.
+# NOTE: Use -g flag to generate debug information (file location/line/column)
+
+CC = clang
+CXX = clang++
 CFLAGS = -Wall -Iinclude -Isrc/math -Isrc/utils -Ilib
+LLVM_FLAGS = -S -emit-llvm -g $(CFLAGS)
 
-SRCS = src/main.c src/math/arithmetic.c src/utils/logger.c lib/extra.c
-OBJS = src/main.o src/math/arithmetic.o src/utils/logger.o lib/extra.o
+SRCS = src/main.c src/math/arithmetic.c src/utils/logger.c lib/extra.c 
+LL_FILES = $(patsubst %.c,build/llvm/%.ll,$(SRCS))
+LINKED_LL = build/llvm/linked.ll
 
-TARGET = callgraph_test
+# File path for our custom plugin pass (JSON call graph output using the new PM)
+PASS_SRC = CallGraphWithFilePath.cpp
+PASS_SO = build/CallGraphWithFilePath.so
 
-all: $(TARGET)
+CALL_GRAPH = build/callgraph.json
 
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+all: call-graph
 
-src/main.o: src/main.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Build all C files into LLVM IR (.ll) files.
+build/llvm/%.ll: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(LLVM_FLAGS) $< -o $@
 
-src/math/arithmetic.o: src/math/arithmetic.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Link all the .ll files into one module.
+$(LINKED_LL): $(LL_FILES)
+	llvm-link $(LL_FILES) -o $(LINKED_LL)
 
-src/utils/logger.o: src/utils/logger.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Build the custom pass shared library.
+# Add -I$(shell llvm-config --includedir) so that headers like llvm/PassPlugin.h are found.
+$(PASS_SO): $(PASS_SRC)
+	@mkdir -p $(dir $@)
+	$(CXX) -shared -fPIC `llvm-config --cxxflags` $(PASS_SRC) -o $(PASS_SO) `llvm-config --ldflags --libs core passes support`
 
-lib/extra.o: lib/extra.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+# Generate the call graph JSON output using the new pass manager plugin system.
+# We load our plugin with -load-pass-plugin and then invoke our pass (registered as "cg-json-new").
+# Our pass uses -cg-json-output to specify the output file.
+call-graph: $(LINKED_LL) $(PASS_SO)
+	opt -load-pass-plugin=./$(PASS_SO) -passes='cg-json' -cg-json-output=$(CALL_GRAPH) $(LINKED_LL) > /dev/null
+	@echo "Call graph JSON saved to $(CALL_GRAPH)"
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -rf build
