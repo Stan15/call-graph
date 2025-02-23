@@ -11,9 +11,8 @@ LL_FILES = $(patsubst %.c,build/llvm/%.ll,$(SRCS))
 LINKED_LL = build/llvm/linked.ll
 
 # File path for our custom plugin pass (JSON call graph output using the new PM)
-PASS_SRC = CallGraphWithFilePath.cpp
-PASS_SO = build/CallGraphWithFilePath.so
-
+PASS_SRC = CallGraphJson.cpp
+PASS_SO = build/CallGraphJson.so
 CALL_GRAPH = build/callgraph.json
 
 all: call-graph
@@ -27,13 +26,12 @@ build/llvm/%.ll: %.c
 $(LINKED_LL): $(LL_FILES)
 	llvm-link $(LL_FILES) -o $(LINKED_LL)
 
-# Build the custom pass shared library.
-# Add -I$(shell llvm-config --includedir) so that headers like llvm/PassPlugin.h are found.
+# Compile the custom pass shared library that we just made to generate JSON call graphs of stuff. We have to compile the plugin so that we can actually run it later on.
 $(PASS_SO): $(PASS_SRC)
 	@mkdir -p $(dir $@)
 	$(CXX) -shared -fPIC `llvm-config --cxxflags` $(PASS_SRC) -o $(PASS_SO) `llvm-config --ldflags --libs core passes support`
 
-# Generate the call graph JSON output using the new pass manager plugin system.
+# Generate the call graph JSON output using the plugin we created - cg-json
 # We load our plugin with -load-pass-plugin and then invoke our pass (registered as "cg-json-new").
 # Our pass uses -cg-json-output to specify the output file.
 call-graph: $(LINKED_LL) $(PASS_SO)
