@@ -4,18 +4,26 @@ CC = clang
 CFLAGS = -Wall -Iinclude -Isrc/math -Isrc/utils -Ilib
 LLVM_FLAGS = -S -emit-llvm -g $(CFLAGS)
 
-SRCS = src/main.c src/math/arithmetic.c src/utils/logger.c lib/extra.c
+SRCS = src/main.c src/math/arithmetic.c src/utils/logger.c lib/extra.c 
 LL_FILES = $(patsubst %.c,build/llvm/%.ll,$(SRCS))
 LINKED_LL = build/llvm/linked.ll
 
-all: $(LINKED_LL)
+all: call-graph
 
+# build all c files into .ll files (LLVM intermediate representation)
 build/llvm/%.ll: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(LLVM_FLAGS) $< -o $@
 
+# link all the .ll files into one file - linked.ll
 $(LINKED_LL): $(LL_FILES)
 	llvm-link $(LL_FILES) -o $(LINKED_LL)
+
+# https://llvm.org/docs/CommandGuide/opt.html
+# https://llvm.org/docs/Passes.html#dot-callgraph-print-call-graph-to-dot-file
+# Generate a call-graph from the linked.ll file. disable other outputs, only intetrested in callgraph
+call-graph: $(LINKED_LL)
+	opt --disable-output -passes='dot-callgraph' $(LINKED_LL)
 
 clean:
 	rm -rf build/llvm
